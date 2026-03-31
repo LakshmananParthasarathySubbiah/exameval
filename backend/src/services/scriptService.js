@@ -1,5 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
-const fs = require('fs');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/cloudinary');
 const logger = require('../utils/logger');
 
 const prisma = new PrismaClient();
@@ -46,15 +46,21 @@ async function getScriptById(id) {
 }
 
 async function createScript({ studentId, examId, filePath }) {
+  // Upload to Cloudinary first
+  const { url } = await uploadToCloudinary(filePath, 'exameval/scripts');
   return prisma.script.create({
-    data: { studentId, examId, filePath, status: 'UPLOADED' },
+    data: { studentId, examId, filePath: url, status: 'UPLOADED' },
     include: { student: { select: { name: true, rollNumber: true } } },
   });
 }
 
 async function bulkCreateScripts(files) {
-  // files: [{ studentId, examId, filePath }]
-  return prisma.script.createMany({ data: files });
+  const results = [];
+  for (const f of files) {
+    const { url } = await uploadToCloudinary(f.filePath, 'exameval/scripts');
+    results.push({ studentId: f.studentId, examId: f.examId, filePath: url });
+  }
+  return prisma.script.createMany({ data: results });
 }
 
 async function deleteScript(id) {
@@ -65,11 +71,12 @@ async function deleteScript(id) {
     throw err;
   }
 
-  // Delete physical file
-  try {
-    fs.unlinkSync(script.filePath);
-  } catch (err) {
-    logger.warn(`Could not delete file ${script.filePath}: ${err.message}`);
+  // Delete from Cloudinary if it's a Cloudinary URL
+  if (script.filePath?.includes('cloudinary.com')) {
+    const parts = script.filePath.split('/');
+    const filename = parts[parts.length - 1].split('.')[0];
+    const folder = parts.slice(-3, -1).join('/');
+    await deleteFromCloudinary(`${folder}/${filename}`);
   }
 
   return prisma.script.delete({ where: { id } });

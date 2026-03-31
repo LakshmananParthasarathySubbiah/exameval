@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const { extractText } = require('../utils/extractText');
+const { uploadToCloudinary } = require('../utils/cloudinary');
 const logger = require('../utils/logger');
 
 const prisma = new PrismaClient();
@@ -46,10 +47,13 @@ async function createExam({ title, date, courseId, rubricFile }) {
   let rubricText = null;
 
   if (rubricFile) {
-    rubricFilePath = rubricFile.path;
+    // Extract text BEFORE uploading (local file still exists)
     const { text } = await extractText(rubricFile.path);
     rubricText = text;
-    logger.info(`Rubric PDF processed for exam: ${title}`);
+    // Upload to Cloudinary (deletes local file after)
+    const { url } = await uploadToCloudinary(rubricFile.path, 'exameval/rubrics');
+    rubricFilePath = url;
+    logger.info(`Rubric uploaded to Cloudinary for exam: ${title}`);
   }
 
   return prisma.exam.create({
@@ -65,10 +69,11 @@ async function updateExam(id, { title, date, courseId, rubricFile }) {
   if (courseId) updateData.courseId = courseId;
 
   if (rubricFile) {
-    updateData.rubricFilePath = rubricFile.path;
     const { text } = await extractText(rubricFile.path);
     updateData.rubricText = text;
-    updateData.rubricParsed = null; // Force re-parse
+    const { url } = await uploadToCloudinary(rubricFile.path, 'exameval/rubrics');
+    updateData.rubricFilePath = url;
+    updateData.rubricParsed = null;
   }
 
   return prisma.exam.update({

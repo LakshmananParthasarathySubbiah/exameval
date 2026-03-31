@@ -1,50 +1,66 @@
 const pdfParse = require('pdf-parse');
 const Tesseract = require('tesseract.js');
 const fs = require('fs');
+const https = require('https');
+const http = require('http');
 const path = require('path');
+const os = require('os');
 const logger = require('./logger');
 
-/**
- * Extract text from a PDF file.
- * Falls back to Tesseract OCR if pdf-parse yields < 100 characters.
- *
- * @param {string} filePath - Absolute path to the PDF file
- * @returns {{ text: string, ocrUsed: boolean }}
- */
+async function downloadFile(url) {
+  const tmpPath = path.join(os.tmpdir(), `exameval_${Date.now()}.pdf`);
+  return new Promise((resolve, reject) => {
+    const proto = url.startsWith('https') ? https : http;
+    const file = fs.createWriteStream(tmpPath);
+    proto.get(url, (res) => {
+      res.pipe(file);
+      file.on('finish', () => { file.close(); resolve(tmpPath); });
+    }).on('error', reject);
+  });
+}
+
 async function extractText(filePath) {
   logger.info(`Extracting text from: ${filePath}`);
 
-  // Attempt pdf-parse first
+  let localPath = filePath;
+  let isTemp = false;
+
+  if (filePath.startsWith('http')) {
+    localPath = await downloadFile(filePath);
+    isTemp = true;
+    logger.info(`Downloaded to temp: ${localPath}`);
+  }
+
   try {
-    const buffer = fs.readFileSync(filePath);
+    const buffer = fs.readFileSync(localPath);
     const data = await pdfParse(buffer);
     const text = (data.text || '').trim();
 
     if (text.length >= 100) {
       logger.info(`pdf-parse succeeded, ${text.length} chars extracted`);
+      if (isTemp) try { fs.unlinkSync(localPath); } catch {}
       return { text, ocrUsed: false };
     }
-
     logger.info(`pdf-parse returned only ${text.length} chars — falling back to OCR`);
   } catch (err) {
     logger.warn(`pdf-parse failed: ${err.message} — falling back to OCR`);
   }
 
-  // OCR fallback using tesseract.js
   try {
     logger.info('Running Tesseract OCR...');
-    const { data } = await Tesseract.recognize(filePath, 'eng', {
+    const { data } = await Tesseract.recognize(localPath, 'eng', {
       logger: (m) => {
         if (m.status === 'recognizing text') {
           logger.debug(`OCR progress: ${Math.round(m.progress * 100)}%`);
         }
       },
     });
-
+    if (isTemp) try { fs.unlinkSync(localPath); } catch {}
     const ocrText = (data.text || '').trim();
     logger.info(`Tesseract OCR completed, ${ocrText.length} chars extracted`);
     return { text: ocrText, ocrUsed: true };
   } catch (ocrErr) {
+    if (isTemp) try { fs.unlinkSync(localPath); } catch {}
     logger.error(`Tesseract OCR failed: ${ocrErr.message}`);
     throw new Error(`Text extraction failed: ${ocrErr.message}`);
   }
