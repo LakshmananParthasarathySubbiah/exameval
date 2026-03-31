@@ -15,6 +15,8 @@ async function uploadToCloudinary(filePath, folder = 'exameval') {
       resource_type: 'raw',
       use_filename: true,
       unique_filename: true,
+      access_mode: 'public',
+      type: 'upload',
     });
     try { fs.unlinkSync(filePath); } catch {}
     logger.info(`Uploaded to Cloudinary: ${result.secure_url}`);
