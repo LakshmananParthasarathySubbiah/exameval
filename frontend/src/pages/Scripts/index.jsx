@@ -191,9 +191,10 @@ export default function ScriptsPage() {
 
       <PDFPreviewModal
         isOpen={!!previewScript}
-        onClose={() => setPreviewScript(null)}
-        filePath={previewScript?.filePath}
-        title={`Script — ${previewScript?.student?.name}`}
+  	onClose={() => setPreviewScript(null)}
+ 	filePath={previewScript?.filePath}
+  	scriptId={previewScript?.id}
+  	title={`Script — ${previewScript?.student?.name}`}
       />
 
       <ConfirmDialog

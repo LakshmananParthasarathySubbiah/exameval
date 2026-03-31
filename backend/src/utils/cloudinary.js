@@ -27,6 +27,35 @@ async function uploadToCloudinary(filePath, folder = 'exameval') {
   }
 }
 
+async function getSignedUrl(cloudinaryUrl) {
+  try {
+    const urlObj = new URL(cloudinaryUrl);
+    const pathParts = urlObj.pathname.split('/');
+    const uploadIndex = pathParts.indexOf('upload');
+    if (uploadIndex === -1) return cloudinaryUrl;
+
+    let publicIdParts = pathParts.slice(uploadIndex + 1);
+    if (publicIdParts[0] && /^v\d+$/.test(publicIdParts[0])) {
+      publicIdParts = publicIdParts.slice(1);
+    }
+    const publicId = publicIdParts.join('/').replace(/\.[^/.]+$/, '');
+
+    const signed = cloudinary.url(publicId, {
+      resource_type: 'raw',
+      sign_url: true,
+      secure: true,
+      type: 'upload',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+    });
+
+    logger.info(`Generated signed URL for: ${publicId}`);
+    return signed;
+  } catch (err) {
+    logger.warn(`Could not generate signed URL: ${err.message}`);
+    return cloudinaryUrl;
+  }
+}
+
 async function deleteFromCloudinary(publicId) {
   try {
     await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
@@ -36,4 +65,4 @@ async function deleteFromCloudinary(publicId) {
   }
 }
 
-module.exports = { uploadToCloudinary, deleteFromCloudinary };
+module.exports = { uploadToCloudinary, deleteFromCloudinary, getSignedUrl };

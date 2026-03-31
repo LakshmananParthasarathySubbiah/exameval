@@ -1,34 +1,50 @@
+import { useState, useEffect } from 'react';
 import Modal from './Modal';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Loader2 } from 'lucide-react';
+import api from '../api/axios';
 
-export default function PDFPreviewModal({ isOpen, onClose, filePath, title = 'PDF Preview' }) {
-  const src = filePath?.startsWith('http')
-    ? filePath
-    : filePath
-      ? `${import.meta.env.VITE_API_URL?.replace('/api', '') || ''}/uploads/${filePath.split('/uploads/')[1]}`
-      : null;
+export default function PDFPreviewModal({ isOpen, onClose, filePath, scriptId, title = 'PDF Preview' }) {
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  // Use Google Docs viewer to embed PDFs (bypasses Cloudinary iframe restrictions)
-  const embedSrc = src
-    ? `https://docs.google.com/viewer?url=${encodeURIComponent(src)}&embedded=true`
-    : null;
+  useEffect(() => {
+    if (!isOpen) return;
+    setPreviewUrl(null);
+
+    if (scriptId) {
+      setLoading(true);
+      api.get(`/scripts/${scriptId}/preview-url`)
+        .then((res) => {
+          setPreviewUrl(res.data.data.url);
+        })
+        .catch(() => {
+          setPreviewUrl(filePath);
+        })
+        .finally(() => setLoading(false));
+    } else {
+      setPreviewUrl(filePath);
+    }
+  }, [isOpen, scriptId, filePath]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="xl">
       <div className="flex flex-col gap-3">
-        {src && (
-          <a href={src} target="_blank" rel="noreferrer" className="btn-secondary self-start text-xs">
+        {previewUrl && (
+          <a href={previewUrl} target="_blank" rel="noreferrer" className="btn-secondary self-start text-xs">
             <ExternalLink className="w-3.5 h-3.5" />
             Open in new tab
           </a>
         )}
-        {embedSrc ? (
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
+          </div>
+        ) : previewUrl ? (
           <iframe
-            src={embedSrc}
+            src={previewUrl}
             className="w-full rounded-lg border border-surface-200 dark:border-surface-700"
             style={{ height: '70vh' }}
             title="PDF Preview"
-            allow="autoplay"
           />
         ) : (
           <div className="flex items-center justify-center h-64 text-slate-400 dark:text-slate-600">
