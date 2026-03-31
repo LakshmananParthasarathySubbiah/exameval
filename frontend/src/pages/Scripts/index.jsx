@@ -41,9 +41,12 @@ export default function ScriptsPage() {
   });
 
   const { data: studentsData } = useQuery({
-    queryKey: ['students-for-exam', examFilter],
-    queryFn: () => studentsApi.list({ limit: 200, ...(examFilter && { examId: examFilter }) }).then((r) => r.data),
-    enabled: !!examFilter,
+    queryKey: ['students-for-exam', uploadForm.examId || examFilter],
+  queryFn: () => studentsApi.list({ 
+    limit: 200, 
+    examId: uploadForm.examId || examFilter 
+  }).then((r) => r.data),
+  enabled: !!(uploadForm.examId || examFilter),
   });
 
   const upload = useMutation({
