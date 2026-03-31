@@ -8,6 +8,11 @@ export default function PDFPreviewModal({ isOpen, onClose, filePath, title = 'PD
       ? `${import.meta.env.VITE_API_URL?.replace('/api', '') || ''}/uploads/${filePath.split('/uploads/')[1]}`
       : null;
 
+  // Use Google Docs viewer to embed PDFs (bypasses Cloudinary iframe restrictions)
+  const embedSrc = src
+    ? `https://docs.google.com/viewer?url=${encodeURIComponent(src)}&embedded=true`
+    : null;
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="xl">
       <div className="flex flex-col gap-3">
@@ -17,12 +22,13 @@ export default function PDFPreviewModal({ isOpen, onClose, filePath, title = 'PD
             Open in new tab
           </a>
         )}
-        {src ? (
+        {embedSrc ? (
           <iframe
-            src={src}
+            src={embedSrc}
             className="w-full rounded-lg border border-surface-200 dark:border-surface-700"
             style={{ height: '70vh' }}
             title="PDF Preview"
+            allow="autoplay"
           />
         ) : (
           <div className="flex items-center justify-center h-64 text-slate-400 dark:text-slate-600">
