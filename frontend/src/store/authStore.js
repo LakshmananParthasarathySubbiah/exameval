@@ -34,17 +34,17 @@ export const useAuthStore = create((set, get) => ({
 
   init: async () => {
     try {
-      const token = await get().refresh();
-      if (token) {
-        // Decode user from token (JWT payload)
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        // Fetch user details or rely on payload
-        set({ user: { id: payload.userId, role: payload.role }, isLoading: false });
-      } else {
-        set({ isLoading: false });
-      }
-    } catch {
+    const { data } = await api.post('/auth/refresh');
+    const token = data.data.accessToken;
+    if (token) {
+      set({ accessToken: token });
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      set({ user: { id: payload.userId, role: payload.role, email: payload.email }, isLoading: false });
+    } else {
       set({ isLoading: false });
     }
+  } catch {
+    set({ isLoading: false });
+  }
   },
 }));
