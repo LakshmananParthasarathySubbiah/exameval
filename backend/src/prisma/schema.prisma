@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum ScriptStatus {
+  UPLOADED
+  PROCESSING
+  EVALUATED
+  FAILED
+}
+
+enum EvaluationStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  PENDING_REVIEW
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  role         Role        @default(STAFF)
+  refreshToken String?
+  createdAt    DateTime    @default(now())
+
+  overrides    Evaluation[] @relation("OverriddenBy")
+  auditLogs    AuditLog[]
+}
+
+model Course {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+
+  exams     Exam[]
+}
+
+model Exam {
+  id              String   @id @default(cuid())
+  title           String
+  date            DateTime
+  courseId        String
+  rubricText      String?
+  rubricFilePath  String?
+  rubricParsed    Json?
+  createdAt       DateTime @default(now())
+
+  course     Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  students   Student[]
+  scripts    Script[]
+}
+
+model Student {
+  id         String   @id @default(cuid())
+  name       String
+  rollNumber String
+  email      String?
+  examId     String
+  createdAt  DateTime @default(now())
+
+  exam    Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  scripts Script[]
+
+  @@unique([rollNumber, examId])
+}
+
+model Script {
+  id            String       @id @default(cuid())
+  studentId     String
+  examId        String
+  filePath      String
+  extractedText String?
+  ocrUsed       Boolean      @default(false)
+  status        ScriptStatus @default(UPLOADED)
+  createdAt     DateTime     @default(now())
+
+  student     Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  exam        Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  evaluations Evaluation[]
+}
+
+model Evaluation {
+  id            String           @id @default(cuid())
+  scriptId      String
+  totalScore    Float?
+  maxScore      Float?
+  percentage    Float?
+  status        EvaluationStatus @default(PENDING)
+  breakdown     Json?
+  staffReviewed Boolean          @default(false)
+  staffNotes    String?
+  overrideScore Float?
+  overriddenBy  String?
+  overriddenAt  DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  script       Script     @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  overrider    User?      @relation("OverriddenBy", fields: [overriddenBy], references: [id])
+  auditLogs    AuditLog[]
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  evaluationId String
+  userId       String
+  action       String
+  prevScore    Float?
+  newScore     Float?
+  reason       String?
+  createdAt    DateTime @default(now())
+
+  evaluation Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id])
+}

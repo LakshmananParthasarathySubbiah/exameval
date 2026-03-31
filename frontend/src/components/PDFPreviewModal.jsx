@@ -1,0 +1,38 @@
+import Modal from './Modal';
+import { ExternalLink } from 'lucide-react';
+
+export default function PDFPreviewModal({ isOpen, onClose, filePath, title = 'PDF Preview' }) {
+  const src = filePath
+    ? `${import.meta.env.VITE_API_URL?.replace('/api', '') || ''}/uploads/${filePath.split('/uploads/')[1]}`
+    : null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="xl">
+      <div className="flex flex-col gap-3">
+        {src && (
+          <a
+            href={src}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-secondary self-start text-xs"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Open in new tab
+          </a>
+        )}
+        {src ? (
+          <iframe
+            src={src}
+            className="w-full rounded-lg border border-surface-200 dark:border-surface-700"
+            style={{ height: '70vh' }}
+            title="PDF Preview"
+          />
+        ) : (
+          <div className="flex items-center justify-center h-64 text-slate-400 dark:text-slate-600">
+            No file available
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
