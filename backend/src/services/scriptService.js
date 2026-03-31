@@ -1,5 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
-const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/cloudinary');
+const { uploadToSupabase, deleteFromSupabase } = require('../utils/supabase');
 const { extractText } = require('../utils/extractText');
 const logger = require('../utils/logger');
 
@@ -60,8 +60,8 @@ async function createScript({ studentId, examId, filePath }) {
     logger.warn(`Text extraction failed at upload: ${err.message}`);
   }
 
-  // Upload to Cloudinary (deletes local file after)
-  const { url } = await uploadToCloudinary(filePath, 'exameval/scripts');
+  // Upload to Supabase
+  const { url } = await uploadToSupabase(filePath, 'scripts');
 
   return prisma.script.create({
     data: {
@@ -90,7 +90,7 @@ async function bulkCreateScripts(files) {
       logger.warn(`Bulk text extraction failed: ${err.message}`);
     }
 
-    const { url } = await uploadToCloudinary(f.filePath, 'exameval/scripts');
+    const { url } = await uploadToSupabase(f.filePath, 'scripts');
     results.push({
       studentId: f.studentId,
       examId: f.examId,
@@ -110,11 +110,11 @@ async function deleteScript(id) {
     throw err;
   }
 
-  if (script.filePath?.includes('cloudinary.com')) {
-    const parts = script.filePath.split('/');
-    const filename = parts[parts.length - 1].split('.')[0];
-    const folder = parts.slice(-3, -1).join('/');
-    await deleteFromCloudinary(`${folder}/${filename}`);
+  // Delete from Supabase if it's a Supabase URL
+  if (script.filePath?.includes('supabase.co')) {
+    const urlParts = script.filePath.split('/');
+    const filePath = urlParts[urlParts.length - 1];
+    await deleteFromSupabase(filePath, 'scripts');
   }
 
   return prisma.script.delete({ where: { id } });

@@ -1,6 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const { extractText } = require('../utils/extractText');
-const { uploadToCloudinary } = require('../utils/cloudinary');
+const { uploadToSupabase } = require('../utils/supabase');
 const logger = require('../utils/logger');
 
 const prisma = new PrismaClient();
@@ -47,13 +47,13 @@ async function createExam({ title, date, courseId, rubricFile }) {
   let rubricText = null;
 
   if (rubricFile) {
-    // Extract text BEFORE uploading (local file still exists)
+    // Extract text BEFORE uploading
     const { text } = await extractText(rubricFile.path);
     rubricText = text;
-    // Upload to Cloudinary (deletes local file after)
-    const { url } = await uploadToCloudinary(rubricFile.path, 'exameval/rubrics');
+    // Upload to Supabase
+    const { url } = await uploadToSupabase(rubricFile.path, 'rubrics');
     rubricFilePath = url;
-    logger.info(`Rubric uploaded to Cloudinary for exam: ${title}`);
+    logger.info(`Rubric uploaded to Supabase for exam: ${title}`);
   }
 
   return prisma.exam.create({
@@ -71,7 +71,7 @@ async function updateExam(id, { title, date, courseId, rubricFile }) {
   if (rubricFile) {
     const { text } = await extractText(rubricFile.path);
     updateData.rubricText = text;
-    const { url } = await uploadToCloudinary(rubricFile.path, 'exameval/rubrics');
+    const { url } = await uploadToSupabase(rubricFile.path, 'rubrics');
     updateData.rubricFilePath = url;
     updateData.rubricParsed = null;
   }
