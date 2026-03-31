@@ -4,7 +4,6 @@ const { PrismaClient } = require('@prisma/client');
 const { extractText } = require('../utils/extractText');
 const { parseRubric } = require('../ai/rubricParser');
 const { mapAnswers } = require('../ai/answerMapper');
-const { evaluateAllQuestions } = require('../ai/questionEvaluator');
 const { aggregateResults } = require('../ai/evaluationAggregator');
 const logger = require('../utils/logger');
 const { sseEmit } = require('../utils/sseManager');
@@ -33,23 +32,33 @@ const worker = new Worker(
       });
       emit({ status: 'PROCESSING', message: 'Starting evaluation...' });
 
-      // ── STEP 1: Extract text ───────────────────────────────────────────
+      // ── STEP 1: Get text ───────────────────────────────────────────
       const script = await prisma.script.findUnique({ where: { id: scriptId } });
       if (!script) throw new Error(`Script not found: ${scriptId}`);
 
       await prisma.script.update({ where: { id: scriptId }, data: { status: 'PROCESSING' } });
-      emit({ status: 'PROCESSING', message: 'Extracting text from PDF...' });
+      emit({ status: 'PROCESSING', message: 'Loading answer script...' });
 
-      const { text, ocrUsed } = await extractText(script.filePath);
-      await prisma.script.update({
-        where: { id: scriptId },
-        data: { extractedText: text, ocrUsed, status: 'PROCESSING' },
-      });
+      let text = script.extractedText;
+      let ocrUsed = script.ocrUsed;
 
-      logger.info(`Text extracted for script ${scriptId}, OCR: ${ocrUsed}`);
-      emit({ status: 'PROCESSING', message: 'Text extracted. Parsing rubric...' });
+      // Use cached text if available, otherwise extract
+      if (!text || text.length < 50) {
+        logger.info(`No cached text found, extracting from file...`);
+        emit({ status: 'PROCESSING', message: 'Extracting text from PDF...' });
+        const result = await extractText(script.filePath);
+        text = result.text;
+        ocrUsed = result.ocrUsed;
+        await prisma.script.update({
+          where: { id: scriptId },
+          data: { extractedText: text, ocrUsed, status: 'PROCESSING' },
+        });
+      } else {
+        logger.info(`Using cached extracted text: ${text.length} chars`);
+        emit({ status: 'PROCESSING', message: `Text ready (${text.length} chars). Parsing rubric...` });
+      }
 
-      // ── STEP 2: Parse rubric ───────────────────────────────────────────
+      // ── STEP 2: Parse rubric ───────────────────────────────────────
       const exam = await prisma.exam.findUnique({ where: { id: examId } });
       if (!exam) throw new Error(`Exam not found: ${examId}`);
 
@@ -67,32 +76,43 @@ const worker = new Worker(
       logger.info(`Rubric ready: ${questions.length} questions`);
       emit({ status: 'PROCESSING', message: 'Rubric parsed. Mapping student answers...', totalQuestions: questions.length });
 
-      // ── STEP 3: Map answers ────────────────────────────────────────────
+      // ── STEP 3: Map answers ────────────────────────────────────────
       const mappedAnswers = await mapAnswers(text);
       const answersMap = new Map(mappedAnswers.map((a) => [a.questionNumber, a.answerText]));
       emit({ status: 'PROCESSING', message: 'Answers mapped. Evaluating questions...' });
 
-      // ── STEP 4: Evaluate each question ────────────────────────────────
-      const questionResults = await Promise.all(
-        questions.map(async (q, idx) => {
-          const answer = answersMap.get(q.questionNumber) || null;
-          // Import evaluateQuestion here to emit progress per question
-          const { evaluateQuestion } = require('../ai/questionEvaluator');
+      // ── STEP 4: Evaluate each question ────────────────────────────
+      emit({
+        status: 'PROCESSING',
+        message: 'Evaluating questions...',
+        currentQuestion: 0,
+        totalQuestions: questions.length,
+      });
 
-          emit({
-            status: 'PROCESSING',
-            message: `Evaluating ${q.questionNumber}...`,
-            currentQuestion: idx + 1,
-            totalQuestions: questions.length,
-          });
+      const { evaluateQuestion } = require('../ai/questionEvaluator');
+      const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_GROQ_CALLS || '5', 10);
+      const questionResults = [];
 
-          return evaluateQuestion(q, answer);
-        })
-      );
+      for (let i = 0; i < questions.length; i += MAX_CONCURRENT) {
+        const batch = questions.slice(i, i + MAX_CONCURRENT);
+        const batchResults = await Promise.all(
+          batch.map(async (q, batchIdx) => {
+            const globalIdx = i + batchIdx;
+            emit({
+              status: 'PROCESSING',
+              message: `Evaluating ${q.questionNumber}...`,
+              currentQuestion: globalIdx + 1,
+              totalQuestions: questions.length,
+            });
+            return evaluateQuestion(q, answersMap.get(q.questionNumber) || null);
+          })
+        );
+        questionResults.push(...batchResults);
+      }
 
       emit({ status: 'PROCESSING', message: 'All questions evaluated. Aggregating...' });
 
-      // ── STEP 5: Aggregate ──────────────────────────────────────────────
+      // ── STEP 5: Aggregate ──────────────────────────────────────────
       const { totalScore, maxScore, percentage, status, breakdown } = aggregateResults(questionResults);
 
       await prisma.evaluation.update({
@@ -140,7 +160,7 @@ const worker = new Worker(
       }).catch(() => {});
 
       emit({ status: 'FAILED', message: err.message });
-      throw err; // Let BullMQ handle retries
+      throw err;
     }
   },
   {

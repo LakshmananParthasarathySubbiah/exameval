@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/cloudinary');
+const { extractText } = require('../utils/extractText');
 const logger = require('../utils/logger');
 
 const prisma = new PrismaClient();
@@ -46,10 +47,31 @@ async function getScriptById(id) {
 }
 
 async function createScript({ studentId, examId, filePath }) {
-  // Upload to Cloudinary first
+  // Extract text BEFORE uploading (file is still local)
+  let extractedText = null;
+  let ocrUsed = false;
+
+  try {
+    const result = await extractText(filePath);
+    extractedText = result.text;
+    ocrUsed = result.ocrUsed;
+    logger.info(`Text extracted before upload: ${extractedText?.length} chars`);
+  } catch (err) {
+    logger.warn(`Text extraction failed at upload: ${err.message}`);
+  }
+
+  // Upload to Cloudinary (deletes local file after)
   const { url } = await uploadToCloudinary(filePath, 'exameval/scripts');
+
   return prisma.script.create({
-    data: { studentId, examId, filePath: url, status: 'UPLOADED' },
+    data: {
+      studentId,
+      examId,
+      filePath: url,
+      extractedText,
+      ocrUsed,
+      status: 'UPLOADED',
+    },
     include: { student: { select: { name: true, rollNumber: true } } },
   });
 }
@@ -57,8 +79,25 @@ async function createScript({ studentId, examId, filePath }) {
 async function bulkCreateScripts(files) {
   const results = [];
   for (const f of files) {
+    let extractedText = null;
+    let ocrUsed = false;
+
+    try {
+      const result = await extractText(f.filePath);
+      extractedText = result.text;
+      ocrUsed = result.ocrUsed;
+    } catch (err) {
+      logger.warn(`Bulk text extraction failed: ${err.message}`);
+    }
+
     const { url } = await uploadToCloudinary(f.filePath, 'exameval/scripts');
-    results.push({ studentId: f.studentId, examId: f.examId, filePath: url });
+    results.push({
+      studentId: f.studentId,
+      examId: f.examId,
+      filePath: url,
+      extractedText,
+      ocrUsed,
+    });
   }
   return prisma.script.createMany({ data: results });
 }
@@ -71,7 +110,6 @@ async function deleteScript(id) {
     throw err;
   }
 
-  // Delete from Cloudinary if it's a Cloudinary URL
   if (script.filePath?.includes('cloudinary.com')) {
     const parts = script.filePath.split('/');
     const filename = parts[parts.length - 1].split('.')[0];
