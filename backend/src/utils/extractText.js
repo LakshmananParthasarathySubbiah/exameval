@@ -9,13 +9,53 @@ const logger = require('./logger');
 
 async function downloadFile(url) {
   const tmpPath = path.join(os.tmpdir(), `exameval_${Date.now()}.pdf`);
+  
   return new Promise((resolve, reject) => {
     const proto = url.startsWith('https') ? https : http;
     const file = fs.createWriteStream(tmpPath);
+    
     proto.get(url, (res) => {
+      // Follow redirects
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        file.close();
+        downloadFile(res.headers.location).then(resolve).catch(reject);
+        return;
+      }
+      
+      if (res.statusCode !== 200) {
+        file.close();
+        reject(new Error(`Failed to download file: HTTP ${res.statusCode}`));
+        return;
+      }
+      
       res.pipe(file);
-      file.on('finish', () => { file.close(); resolve(tmpPath); });
-    }).on('error', reject);
+      
+      file.on('finish', () => {
+        file.close(() => {
+          // Verify file size
+          const stats = fs.statSync(tmpPath);
+          if (stats.size === 0) {
+            reject(new Error('Downloaded file is empty'));
+            return;
+          }
+          logger.info(`Downloaded ${stats.size} bytes to ${tmpPath}`);
+          resolve(tmpPath);
+        });
+      });
+      
+      file.on('error', (err) => {
+        fs.unlink(tmpPath, () => {});
+        reject(err);
+      });
+      
+      res.on('error', (err) => {
+        fs.unlink(tmpPath, () => {});
+        reject(err);
+      });
+    }).on('error', (err) => {
+      fs.unlink(tmpPath, () => {});
+      reject(err);
+    });
   });
 }
 
