@@ -32,6 +32,7 @@ const PAGE_META = {
 
 function ChatbotPopup() {
   const [open, setOpen] = useState(false);
+
   return (
     <>
       {/* Floating button */}
@@ -63,7 +64,9 @@ function ChatbotPopup() {
       {/* Full screen overlay modal */}
       {open && (
         <div
-          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setOpen(false);
+          }}
           style={{
             position: 'fixed',
             inset: 0,
@@ -72,34 +75,45 @@ function ChatbotPopup() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '16px',
+            padding: '0px', // removed padding for true fullscreen
           }}
         >
-          <div style={{
-            width: '100%',
-            height: '100%',
-            maxWidth: '900px',
-            maxHeight: '90vh',
-            borderRadius: '16px',
-            overflow: 'hidden',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
-            display: 'flex',
-            flexDirection: 'column',
-            background: 'white',
-          }}>
-            {/* Header bar */}
-            <div style={{
+          <div
+            style={{
+              width: '100%',
+              height: '100vh',        // ✅ FULL HEIGHT FIX
+              maxWidth: '100%',       // ✅ FULL WIDTH (optional fullscreen)
+              maxHeight: '100vh',     // ✅ NO CUTTING
+              borderRadius: '0px',    // ✅ fullscreen look
+              overflow: 'auto',       // ✅ SCROLL ENABLED
+              boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px 16px',
-              background: '#0f172a',
-              borderBottom: '1px solid #1e293b',
-              flexShrink: 0,
-            }}>
-              <span style={{ color: 'white', fontWeight: 700, fontSize: '15px' }}>
+              flexDirection: 'column',
+              background: 'white',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                background: '#0f172a',
+                borderBottom: '1px solid #1e293b',
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={{
+                  color: 'white',
+                  fontWeight: 700,
+                  fontSize: '15px',
+                }}
+              >
                 🤖 AI Assistant
               </span>
+
               <button
                 onClick={() => setOpen(false)}
                 style={{
@@ -117,16 +131,16 @@ function ChatbotPopup() {
               </button>
             </div>
 
-            {/* iframe takes full remaining space */}
+            {/* Chatbot iframe */}
             <iframe
               src="https://db-agent-lup9.vercel.app/"
+              title="AI Assistant"
               style={{
                 flex: 1,
                 width: '100%',
                 border: 'none',
                 display: 'block',
               }}
-              title="AI Assistant"
             />
           </div>
         </div>
@@ -134,7 +148,6 @@ function ChatbotPopup() {
     </>
   );
 }
-
 function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
