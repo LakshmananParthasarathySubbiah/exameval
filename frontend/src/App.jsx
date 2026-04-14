@@ -1,7 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
-import { useAuthStore as useStore } from './store/authStore';
 import { setAuthStoreRef } from './api/axios';
 import { useUIStore } from './store/uiStore';
 import Sidebar from './components/Sidebar';
@@ -14,6 +13,8 @@ import StudentsPage from './pages/Students';
 import ScriptsPage from './pages/Scripts';
 import EvaluationsPage from './pages/Evaluations';
 import EvaluationDetailPage from './pages/EvaluationDetail';
+import { useRef } from 'react';
+import { useAuthStore as useStore } from './store/authStore';
 
 function AxiosSetup() {
   const storeRef = useRef(useStore);
@@ -31,62 +32,101 @@ const PAGE_META = {
 
 function ChatbotPopup() {
   const [open, setOpen] = useState(false);
-
   return (
     <>
-      {/* Floating Toggle Button */}
+      {/* Floating button */}
       <button
         onClick={() => setOpen((o) => !o)}
-        className="fixed bottom-6 right-6 z-[9999] w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xl flex items-center justify-center transition-all active:scale-95"
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 9999,
+          width: '56px',
+          height: '56px',
+          borderRadius: '50%',
+          background: '#4f46e5',
+          border: 'none',
+          cursor: 'pointer',
+          boxShadow: '0 4px 24px rgba(79,70,229,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '24px',
+          color: 'white',
+        }}
         title="AI Assistant"
       >
-        {open ? (
-          <span className="text-xl">✕</span>
-        ) : (
-          <span className="text-2xl">🤖</span>
-        )}
+        {open ? '✕' : '🤖'}
       </button>
 
-      {/* Chat Container */}
+      {/* Full screen overlay modal */}
       {open && (
         <div
+          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
           style={{
             position: 'fixed',
-            bottom: '90px', // Sits above the button
-            right: '24px',
+            inset: 0,
             zIndex: 9998,
-            width: 'min(90vw, 450px)', // Responsive width limits
-            height: 'min(80vh, 700px)', // Responsive height limits
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div style={{
+            width: '100%',
+            height: '100%',
+            maxWidth: '900px',
+            maxHeight: '90vh',
+            borderRadius: '16px',
+            overflow: 'hidden',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
             display: 'flex',
             flexDirection: 'column',
             background: 'white',
-            borderRadius: '16px',
-            overflow: 'hidden',
-            boxShadow: '0 12px 48px rgba(0,0,0,0.25)',
-            border: '1px solid #e2e8f0',
-          }}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 bg-slate-900 text-white shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🤖</span>
-              <span className="font-semibold text-sm">DB Agent Assistant</span>
+          }}>
+            {/* Header bar */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              background: '#0f172a',
+              borderBottom: '1px solid #1e293b',
+              flexShrink: 0,
+            }}>
+              <span style={{ color: 'white', fontWeight: 700, fontSize: '15px' }}>
+                🤖 AI Assistant
+              </span>
+              <button
+                onClick={() => setOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                }}
+              >
+                ✕
+              </button>
             </div>
-            <button 
-              onClick={() => setOpen(false)}
-              className="hover:bg-slate-800 p-1 rounded-md transition-colors leading-none"
-            >
-              ✕
-            </button>
-          </div>
 
-          {/* Iframe Body - Ensuring no overflow or clipping */}
-          <div className="flex-1 w-full h-full bg-white relative">
+            {/* iframe takes full remaining space */}
             <iframe
               src="https://db-agent-lup9.vercel.app/"
-              className="absolute inset-0 w-full h-full border-none block"
+              style={{
+                flex: 1,
+                width: '100%',
+                border: 'none',
+                display: 'block',
+              }}
               title="AI Assistant"
-              allow="clipboard-read; clipboard-write; microphone"
             />
           </div>
         </div>
@@ -102,7 +142,6 @@ function AppLayout() {
     (location.pathname.startsWith('/evaluations/')
       ? { title: 'Evaluation Detail', breadcrumb: ['Evaluations', 'Detail'] }
       : { title: 'ExamEval', breadcrumb: [] });
-      
   return (
     <div className="flex h-screen overflow-hidden bg-surface-50 dark:bg-surface-950">
       <Sidebar collapsed={collapsed} />
@@ -123,7 +162,6 @@ function AppLayout() {
 
 function ProtectedRoute() {
   const { user, isLoading } = useAuthStore();
-  
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-surface-950">
@@ -134,21 +172,17 @@ function ProtectedRoute() {
       </div>
     );
   }
-  
   return user ? <Outlet /> : <Navigate to="/login" replace />;
 }
 
 export default function App() {
   const init = useAuthStore((s) => s.init);
-  
   useEffect(() => {
     setAuthStoreRef({ getState: () => useAuthStore.getState() });
     init();
   }, []);
-  
   return (
     <BrowserRouter>
-      <AxiosSetup />
       <ToastContainer />
       <ChatbotPopup />
       <Routes>
