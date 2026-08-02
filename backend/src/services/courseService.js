@@ -1,11 +1,14 @@
-const { PrismaClient } = require('@prisma/client');
-
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 async function getCourses({ page = 1, limit = 20, search = '' }) {
   const skip = (page - 1) * limit;
   const where = search
-    ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { code: { contains: search, mode: 'insensitive' } }] }
+    ? {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { code: { contains: search, mode: 'insensitive' } },
+        ],
+      }
     : {};
 
   const [courses, total] = await Promise.all([

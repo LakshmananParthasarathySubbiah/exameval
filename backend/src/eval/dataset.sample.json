@@ -1,0 +1,17 @@
+{
+  "description": "Sample ground-truth set: human-assigned scores vs AI scores per question. Replace with your own labeled data (anonymized, no PII). 'ai' may be omitted to run live grading via --live.",
+  "passRatio": 0.4,
+  "tolerance": 1,
+  "items": [
+    { "questionId": "DBMS-Q1-S1", "maxScore": 10, "human": 8, "ai": 8 },
+    { "questionId": "DBMS-Q1-S2", "maxScore": 10, "human": 5, "ai": 6 },
+    { "questionId": "DBMS-Q1-S3", "maxScore": 10, "human": 9, "ai": 8 },
+    { "questionId": "DBMS-Q2-S1", "maxScore": 10, "human": 7, "ai": 7 },
+    { "questionId": "DBMS-Q2-S2", "maxScore": 10, "human": 3, "ai": 4 },
+    { "questionId": "DBMS-Q2-S3", "maxScore": 10, "human": 10, "ai": 9 },
+    { "questionId": "OS-Q1-S1", "maxScore": 5, "human": 4, "ai": 4 },
+    { "questionId": "OS-Q1-S2", "maxScore": 5, "human": 1, "ai": 2 },
+    { "questionId": "OS-Q2-S1", "maxScore": 5, "human": 5, "ai": 5 },
+    { "questionId": "OS-Q2-S2", "maxScore": 5, "human": 2, "ai": 2 }
+  ]
+}

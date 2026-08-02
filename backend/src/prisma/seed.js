@@ -1,7 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
-
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 async function main() {
   console.log('Seeding database...');
@@ -55,20 +53,37 @@ async function main() {
       title: 'DBMS Mid-Term Examination',
       date: new Date('2025-04-15'),
       courseId: dbms.id,
-      rubricText: 'Q1: Explain normalization (10 marks). Key points: 1NF, 2NF, 3NF, BCNF definitions and examples.\nQ2: Write SQL JOIN query (10 marks). Key points: INNER JOIN syntax, correct WHERE clause, proper aliasing.',
+      createdById: admin.id,
+      rubricText:
+        'Q1: Explain normalization (10 marks). Key points: 1NF, 2NF, 3NF, BCNF definitions and examples.\nQ2: Write SQL JOIN query (10 marks). Key points: INNER JOIN syntax, correct WHERE clause, proper aliasing.',
     },
   });
 
   // Create students
   const students = await Promise.all([
     prisma.student.create({
-      data: { name: 'Arjun Kumar', rollNumber: '21BCE0001', email: 'arjun@vit.ac.in', examId: exam.id },
+      data: {
+        name: 'Arjun Kumar',
+        rollNumber: '21BCE0001',
+        email: 'arjun@vit.ac.in',
+        examId: exam.id,
+      },
     }),
     prisma.student.create({
-      data: { name: 'Priya Sharma', rollNumber: '21BCE0002', email: 'priya@vit.ac.in', examId: exam.id },
+      data: {
+        name: 'Priya Sharma',
+        rollNumber: '21BCE0002',
+        email: 'priya@vit.ac.in',
+        examId: exam.id,
+      },
     }),
     prisma.student.create({
-      data: { name: 'Rohit Verma', rollNumber: '21BCE0003', email: 'rohit@vit.ac.in', examId: exam.id },
+      data: {
+        name: 'Rohit Verma',
+        rollNumber: '21BCE0003',
+        email: 'rohit@vit.ac.in',
+        examId: exam.id,
+      },
     }),
   ]);
 

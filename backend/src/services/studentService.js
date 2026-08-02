@@ -1,6 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 async function getStudents({ page = 1, limit = 20, examId }) {
   const skip = (page - 1) * limit;
@@ -48,10 +46,10 @@ async function bulkCreateStudents(students) {
   return results;
 }
 
-async function updateStudent(id, { name, rollNumber, email }) {
+async function updateStudent(id, { name, rollNumber, email, examId }) {
   return prisma.student.update({
     where: { id },
-    data: { name, rollNumber, email },
+    data: { name, rollNumber, email: email || null, examId },
   });
 }
 

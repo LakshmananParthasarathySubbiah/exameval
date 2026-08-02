@@ -7,15 +7,22 @@ router.use(authenticate);
 
 router.get('/', controller.getCourses);
 
-router.post('/', requireRole('ADMIN'), [
-  body('name').trim().notEmpty().withMessage('Course name is required'),
-  body('code').trim().notEmpty().withMessage('Course code is required'),
-], controller.createCourse);
+router.post(
+  '/',
+  requireRole('ADMIN'),
+  [
+    body('name').trim().notEmpty().withMessage('Course name is required'),
+    body('code').trim().notEmpty().withMessage('Course code is required'),
+  ],
+  controller.createCourse
+);
 
-router.put('/:id', requireRole('ADMIN'), [
-  body('name').optional().trim().notEmpty(),
-  body('code').optional().trim().notEmpty(),
-], controller.updateCourse);
+router.put(
+  '/:id',
+  requireRole('ADMIN'),
+  [body('name').optional().trim().notEmpty(), body('code').optional().trim().notEmpty()],
+  controller.updateCourse
+);
 
 router.delete('/:id', requireRole('ADMIN'), controller.deleteCourse);
 

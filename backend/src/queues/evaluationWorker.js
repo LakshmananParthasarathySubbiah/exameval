@@ -1,20 +1,22 @@
 const { Worker } = require('bullmq');
 const { Redis } = require('ioredis');
-const { PrismaClient } = require('@prisma/client');
 const { extractText } = require('../utils/extractText');
 const { parseRubric } = require('../ai/rubricParser');
 const { mapAnswers } = require('../ai/answerMapper');
 const { aggregateResults } = require('../ai/evaluationAggregator');
 const logger = require('../utils/logger');
 const { sseEmit } = require('../utils/sseManager');
+const { evaluationsTotal } = require('../utils/metrics');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null,
 });
 
-connection.on('error', (err) => logger.error('Redis worker connection error', { error: err.message }));
+connection.on('error', (err) =>
+  logger.error('Redis worker connection error', { error: err.message })
+);
 
 const worker = new Worker(
   'evaluation',
@@ -25,6 +27,13 @@ const worker = new Worker(
     const emit = (data) => sseEmit(evaluationId, data);
 
     try {
+      // Verify evaluation record exists before updating
+      const evaluation = await prisma.evaluation.findUnique({ where: { id: evaluationId } });
+      if (!evaluation) {
+        logger.warn(`Evaluation job ${evaluationId} discarded: record not found in database.`);
+        return;
+      }
+
       // Mark evaluation as PROCESSING
       await prisma.evaluation.update({
         where: { id: evaluationId },
@@ -34,7 +43,14 @@ const worker = new Worker(
 
       // ── STEP 1: Get text ───────────────────────────────────────────
       const script = await prisma.script.findUnique({ where: { id: scriptId } });
-      if (!script) throw new Error(`Script not found: ${scriptId}`);
+      if (!script) {
+        logger.warn(`Script ${scriptId} not found for evaluation ${evaluationId}. Marking evaluation as FAILED.`);
+        await prisma.evaluation.update({
+          where: { id: evaluationId },
+          data: { status: 'FAILED' },
+        }).catch(() => {});
+        return;
+      }
 
       await prisma.script.update({ where: { id: scriptId }, data: { status: 'PROCESSING' } });
       emit({ status: 'PROCESSING', message: 'Loading answer script...' });
@@ -51,11 +67,14 @@ const worker = new Worker(
         ocrUsed = result.ocrUsed;
         await prisma.script.update({
           where: { id: scriptId },
-          data: { extractedText: text, ocrUsed, status: 'PROCESSING' },
+          data: { extractedText: text, ocrUsed, ocrMethod: result.ocrMethod, status: 'PROCESSING' },
         });
       } else {
         logger.info(`Using cached extracted text: ${text.length} chars`);
-        emit({ status: 'PROCESSING', message: `Text ready (${text.length} chars). Parsing rubric...` });
+        emit({
+          status: 'PROCESSING',
+          message: `Text ready (${text.length} chars). Parsing rubric...`,
+        });
       }
 
       // ── STEP 2: Parse rubric ───────────────────────────────────────
@@ -74,7 +93,11 @@ const worker = new Worker(
 
       const questions = Array.isArray(rubricParsed) ? rubricParsed : [];
       logger.info(`Rubric ready: ${questions.length} questions`);
-      emit({ status: 'PROCESSING', message: 'Rubric parsed. Mapping student answers...', totalQuestions: questions.length });
+      emit({
+        status: 'PROCESSING',
+        message: 'Rubric parsed. Mapping student answers...',
+        totalQuestions: questions.length,
+      });
 
       // ── STEP 3: Map answers ────────────────────────────────────────
       const mappedAnswers = await mapAnswers(text);
@@ -113,7 +136,8 @@ const worker = new Worker(
       emit({ status: 'PROCESSING', message: 'All questions evaluated. Aggregating...' });
 
       // ── STEP 5: Aggregate ──────────────────────────────────────────
-      const { totalScore, maxScore, percentage, status, breakdown } = aggregateResults(questionResults);
+      const { totalScore, maxScore, percentage, status, breakdown } =
+        aggregateResults(questionResults);
 
       await prisma.evaluation.update({
         where: { id: evaluationId },
@@ -127,37 +151,60 @@ const worker = new Worker(
         },
       });
 
+      // Persist normalized per-question rows for analytics (idempotent on retry).
+      await prisma.questionResult.deleteMany({ where: { evaluationId } });
+      await prisma.questionResult.createMany({
+        data: questionResults.map((q) => ({
+          evaluationId,
+          questionNumber: String(q.questionNumber),
+          questionText: q.questionText || null,
+          score: q.score,
+          maxScore: q.maxScore,
+          confidence: q.confidence,
+          injectionFlagged: !!q.injectionFlagged,
+        })),
+      });
+
       await prisma.script.update({
         where: { id: scriptId },
         data: { status: 'EVALUATED' },
       });
 
-      logger.info(`Evaluation ${evaluationId} complete: ${totalScore}/${maxScore} (${percentage}%) — ${status}`);
+      logger.info(
+        `Evaluation ${evaluationId} complete: ${totalScore}/${maxScore} (${percentage}%) — ${status}`
+      );
 
       emit({
         status,
         totalScore,
         maxScore,
         percentage,
-        message: status === 'PENDING_REVIEW'
-          ? 'Evaluation complete — flagged for review (low confidence)'
-          : 'Evaluation complete!',
+        message:
+          status === 'PENDING_REVIEW'
+            ? 'Evaluation complete — flagged for review (low confidence)'
+            : 'Evaluation complete!',
         currentQuestion: questions.length,
         totalQuestions: questions.length,
       });
-
     } catch (err) {
-      logger.error(`Evaluation job failed: ${evaluationId}`, { error: err.message, stack: err.stack });
+      logger.error(`Evaluation job failed: ${evaluationId}`, {
+        error: err.message,
+        stack: err.stack,
+      });
 
-      await prisma.evaluation.update({
-        where: { id: evaluationId },
-        data: { status: 'FAILED' },
-      }).catch(() => {});
+      await prisma.evaluation
+        .update({
+          where: { id: evaluationId },
+          data: { status: 'FAILED' },
+        })
+        .catch(() => {});
 
-      await prisma.script.update({
-        where: { id: scriptId },
-        data: { status: 'FAILED' },
-      }).catch(() => {});
+      await prisma.script
+        .update({
+          where: { id: scriptId },
+          data: { status: 'FAILED' },
+        })
+        .catch(() => {});
 
       emit({ status: 'FAILED', message: err.message });
       throw err;
@@ -171,10 +218,12 @@ const worker = new Worker(
 
 worker.on('completed', (job) => {
   logger.info(`Job ${job.id} completed`);
+  evaluationsTotal.inc({ status: 'completed' });
 });
 
 worker.on('failed', (job, err) => {
   logger.error(`Job ${job?.id} failed`, { error: err.message });
+  evaluationsTotal.inc({ status: 'failed' });
 });
 
 worker.on('error', (err) => {
@@ -183,4 +232,4 @@ worker.on('error', (err) => {
 
 logger.info('Evaluation worker started');
 
-module.exports = { worker };
+module.exports = { worker, connection };

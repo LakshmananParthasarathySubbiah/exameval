@@ -7,18 +7,27 @@ router.use(authenticate);
 
 router.get('/', controller.getStudents);
 
-router.post('/', [
-  body('*.name').optional().trim().notEmpty(),
-  body('name').optional().trim().notEmpty(),
-  body('rollNumber').optional().trim().notEmpty(),
-  body('examId').optional().notEmpty(),
-], controller.createStudent);
+router.post(
+  '/',
+  [
+    body('*.name').optional().trim().notEmpty(),
+    body('name').optional().trim().notEmpty(),
+    body('rollNumber').optional().trim().notEmpty(),
+    body('examId').optional().notEmpty(),
+  ],
+  controller.createStudent
+);
 
-router.put('/:id', [
-  body('name').optional().trim().notEmpty(),
-  body('rollNumber').optional().trim().notEmpty(),
-  body('email').optional().isEmail(),
-], controller.updateStudent);
+router.put(
+  '/:id',
+  [
+    body('name').optional().trim().notEmpty(),
+    body('rollNumber').optional().trim().notEmpty(),
+    body('email').optional({ values: 'falsy' }).isEmail(),
+    body('examId').optional().notEmpty(),
+  ],
+  controller.updateStudent
+);
 
 router.delete('/:id', controller.deleteStudent);
 

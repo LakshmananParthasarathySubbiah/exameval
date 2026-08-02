@@ -1,8 +1,7 @@
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
 const logger = require('../utils/logger');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 /**
  * Verify JWT access token.
@@ -10,7 +9,9 @@ const prisma = new PrismaClient();
 const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ success: false, error: 'Missing or invalid authorization header' });
+    return res
+      .status(401)
+      .json({ success: false, error: 'Missing or invalid authorization header' });
   }
 
   const token = authHeader.split(' ')[1];
@@ -33,13 +34,17 @@ const authenticate = async (req, res, next) => {
 /**
  * Role guard factory. Usage: requireRole('ADMIN') or requireRole(['ADMIN', 'STAFF'])
  */
-const requireRole = (...roles) => (req, res, next) => {
-  const allowed = roles.flat();
-  if (!req.user || !allowed.includes(req.user.role)) {
-    logger.warn(`Access denied for user ${req.user?.id} — required: ${allowed.join(', ')}, got: ${req.user?.role}`);
-    return res.status(403).json({ success: false, error: 'Insufficient permissions' });
-  }
-  next();
-};
+const requireRole =
+  (...roles) =>
+  (req, res, next) => {
+    const allowed = roles.flat();
+    if (!req.user || !allowed.includes(req.user.role)) {
+      logger.warn(
+        `Access denied for user ${req.user?.id} — required: ${allowed.join(', ')}, got: ${req.user?.role}`
+      );
+      return res.status(403).json({ success: false, error: 'Insufficient permissions' });
+    }
+    next();
+  };
 
 module.exports = { authenticate, requireRole };

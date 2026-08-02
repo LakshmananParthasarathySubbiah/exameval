@@ -1,9 +1,18 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
+const crypto = require('crypto');
 const logger = require('../utils/logger');
+const prisma = require('../utils/prisma');
 
-const prisma = new PrismaClient();
+/**
+ * Hash a refresh token before persisting it. Refresh tokens are high-entropy
+ * JWTs, so a fast SHA-256 is appropriate (and avoids bcrypt's 72-byte
+ * truncation). Storing only the hash means a DB leak can't be used to mint
+ * sessions; the raw token is returned to the client and never stored.
+ */
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 function generateAccessToken(userId, role) {
   return jwt.sign({ userId, role }, process.env.JWT_ACCESS_SECRET, {
@@ -53,7 +62,10 @@ async function login({ email, password }) {
   const accessToken = generateAccessToken(user.id, user.role);
   const refreshToken = generateRefreshToken(user.id);
 
-  await prisma.user.update({ where: { id: user.id }, data: { refreshToken } });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { refreshToken: hashToken(refreshToken) },
+  });
 
   logger.info(`User logged in: ${email}`);
   return {
@@ -74,7 +86,7 @@ async function refresh(token) {
   }
 
   const user = await prisma.user.findUnique({ where: { id: payload.userId } });
-  if (!user || user.refreshToken !== token) {
+  if (!user || !user.refreshToken || user.refreshToken !== hashToken(token)) {
     const err = new Error('Refresh token revoked or not found');
     err.status = 401;
     throw err;
@@ -82,7 +94,10 @@ async function refresh(token) {
 
   const accessToken = generateAccessToken(user.id, user.role);
   const newRefreshToken = generateRefreshToken(user.id);
-  await prisma.user.update({ where: { id: user.id }, data: { refreshToken: newRefreshToken } });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { refreshToken: hashToken(newRefreshToken) },
+  });
 
   return { accessToken, refreshToken: newRefreshToken };
 }

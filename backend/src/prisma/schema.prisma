@@ -28,15 +28,16 @@ enum EvaluationStatus {
 }
 
 model User {
-  id           String      @id @default(cuid())
-  email        String      @unique
+  id           String   @id @default(cuid())
+  email        String   @unique
   passwordHash String
-  role         Role        @default(STAFF)
+  role         Role     @default(STAFF)
   refreshToken String?
-  createdAt    DateTime    @default(now())
+  createdAt    DateTime @default(now())
 
   overrides    Evaluation[] @relation("OverriddenBy")
   auditLogs    AuditLog[]
+  createdExams Exam[]       @relation("ExamCreatedBy")
 }
 
 model Course {
@@ -45,22 +46,27 @@ model Course {
   code      String   @unique
   createdAt DateTime @default(now())
 
-  exams     Exam[]
+  exams Exam[]
 }
 
 model Exam {
-  id              String   @id @default(cuid())
-  title           String
-  date            DateTime
-  courseId        String
-  rubricText      String?
-  rubricFilePath  String?
-  rubricParsed    Json?
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  title          String
+  date           DateTime
+  courseId       String
+  createdById    String?
+  rubricText     String?
+  rubricFilePath String?
+  rubricParsed   Json?
+  createdAt      DateTime @default(now())
 
-  course     Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  students   Student[]
-  scripts    Script[]
+  course   Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  creator  User?     @relation("ExamCreatedBy", fields: [createdById], references: [id])
+  students Student[]
+  scripts  Script[]
+
+  @@index([courseId])
+  @@index([createdById])
 }
 
 model Student {
@@ -75,6 +81,7 @@ model Student {
   scripts Script[]
 
   @@unique([rollNumber, examId])
+  @@index([examId])
 }
 
 model Script {
@@ -84,12 +91,17 @@ model Script {
   filePath      String
   extractedText String?
   ocrUsed       Boolean      @default(false)
+  ocrMethod     String?
   status        ScriptStatus @default(UPLOADED)
   createdAt     DateTime     @default(now())
 
   student     Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
   exam        Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
   evaluations Evaluation[]
+
+  @@index([examId])
+  @@index([studentId])
+  @@index([status])
 }
 
 model Evaluation {
@@ -108,9 +120,34 @@ model Evaluation {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
-  script       Script     @relation(fields: [scriptId], references: [id], onDelete: Cascade)
-  overrider    User?      @relation("OverriddenBy", fields: [overriddenBy], references: [id])
-  auditLogs    AuditLog[]
+  script          Script           @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  overrider       User?            @relation("OverriddenBy", fields: [overriddenBy], references: [id])
+  auditLogs       AuditLog[]
+  questionResults QuestionResult[]
+
+  @@index([scriptId])
+  @@index([status])
+}
+
+// Per-question results, persisted as rows ALONGSIDE Evaluation.breakdown (JSON).
+// The JSON is kept for fast read of a single evaluation; these rows make
+// per-question data SQL-queryable for analytics (item analysis, difficulty,
+// discrimination, reliability) without parsing JSON.
+model QuestionResult {
+  id               String   @id @default(cuid())
+  evaluationId     String
+  questionNumber   String
+  questionText     String?
+  score            Float
+  maxScore         Float
+  confidence       Float
+  injectionFlagged Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  evaluation Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationId])
+  @@index([questionNumber])
 }
 
 model AuditLog {
@@ -125,4 +162,7 @@ model AuditLog {
 
   evaluation Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
   user       User       @relation(fields: [userId], references: [id])
+
+  @@index([evaluationId])
+  @@index([userId])
 }

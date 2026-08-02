@@ -56,7 +56,7 @@ function sseEmit(evaluationId, data) {
  * Send heartbeat to all clients.
  */
 function startHeartbeat() {
-  setInterval(() => {
+  return setInterval(() => {
     for (const [evaluationId, clients] of sseClients.entries()) {
       for (const res of clients) {
         try {
@@ -69,4 +69,20 @@ function startHeartbeat() {
   }, 15000);
 }
 
-module.exports = { sseConnect, sseDisconnect, sseEmit, startHeartbeat };
+/**
+ * Close all open SSE connections (used during graceful shutdown).
+ */
+function closeAllClients() {
+  for (const [evaluationId, clients] of sseClients.entries()) {
+    for (const res of clients) {
+      try {
+        res.end();
+      } catch {
+        /* already closed */
+      }
+    }
+    sseClients.delete(evaluationId);
+  }
+}
+
+module.exports = { sseConnect, sseDisconnect, sseEmit, startHeartbeat, closeAllClients };

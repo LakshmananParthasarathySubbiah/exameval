@@ -6,23 +6,36 @@ const logger = require('../utils/logger');
 async function getEvaluations(req, res, next) {
   try {
     const { page = 1, limit = 20, examId, status } = req.query;
-    const result = await evaluationService.getEvaluations({ page: +page, limit: +limit, examId, status });
+    const result = await evaluationService.getEvaluations({
+      page: +page,
+      limit: +limit,
+      examId,
+      status,
+    });
     res.json({ success: true, data: result.evaluations, pagination: result.pagination });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function getEvaluation(req, res, next) {
   try {
     const evaluation = await evaluationService.getEvaluationById(req.params.id);
     res.json({ success: true, data: evaluation });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function runEvaluation(req, res, next) {
   try {
     const evaluation = await evaluationService.runEvaluation(req.params.scriptId, req.user.id);
-    res.status(202).json({ success: true, data: { evaluationId: evaluation.id, status: evaluation.status } });
-  } catch (err) { next(err); }
+    res
+      .status(202)
+      .json({ success: true, data: { evaluationId: evaluation.id, status: evaluation.status } });
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function runBatchEvaluation(req, res, next) {
@@ -33,14 +46,18 @@ async function runBatchEvaluation(req, res, next) {
     }
     const results = await evaluationService.runBatchEvaluation(scriptIds, req.user.id);
     res.status(202).json({ success: true, data: results });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function retryEvaluation(req, res, next) {
   try {
     const result = await evaluationService.retryEvaluation(req.params.id);
     res.json({ success: true, data: result });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function reviewEvaluation(req, res, next) {
@@ -52,7 +69,9 @@ async function reviewEvaluation(req, res, next) {
       req.user.id
     );
     res.json({ success: true, data: updated });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function streamEvents(req, res, next) {
@@ -69,7 +88,9 @@ async function streamEvents(req, res, next) {
 
     // Send initial connection confirmation
     res.write(`data: ${JSON.stringify({ status: 'CONNECTED', evaluationId: id })}\n\n`);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function getExamSummary(req, res, next) {
@@ -78,7 +99,9 @@ async function getExamSummary(req, res, next) {
     if (!examId) return res.status(400).json({ success: false, error: 'examId is required' });
     const summary = await evaluationService.getExamSummary(examId);
     res.json({ success: true, data: summary });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 }
 
 module.exports = {

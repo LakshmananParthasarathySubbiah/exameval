@@ -1,9 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
 const { uploadToSupabase, deleteFromSupabase } = require('../utils/supabase');
-const { extractText } = require('../utils/extractText');
 const logger = require('../utils/logger');
-
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 async function getScripts({ page = 1, limit = 20, examId, studentId }) {
   const skip = (page - 1) * limit;
@@ -47,19 +44,6 @@ async function getScriptById(id) {
 }
 
 async function createScript({ studentId, examId, filePath }) {
-  // Extract text BEFORE uploading (file is still local)
-  let extractedText = null;
-  let ocrUsed = false;
-
-  try {
-    const result = await extractText(filePath);
-    extractedText = result.text;
-    ocrUsed = result.ocrUsed;
-    logger.info(`Text extracted before upload: ${extractedText?.length} chars`);
-  } catch (err) {
-    logger.warn(`Text extraction failed at upload: ${err.message}`);
-  }
-
   // Upload to Supabase
   const { url } = await uploadToSupabase(filePath, 'scripts');
 
@@ -68,8 +52,9 @@ async function createScript({ studentId, examId, filePath }) {
       studentId,
       examId,
       filePath: url,
-      extractedText,
-      ocrUsed,
+      extractedText: null,
+      ocrUsed: false,
+      ocrMethod: null,
       status: 'UPLOADED',
     },
     include: { student: { select: { name: true, rollNumber: true } } },
@@ -79,24 +64,14 @@ async function createScript({ studentId, examId, filePath }) {
 async function bulkCreateScripts(files) {
   const results = [];
   for (const f of files) {
-    let extractedText = null;
-    let ocrUsed = false;
-
-    try {
-      const result = await extractText(f.filePath);
-      extractedText = result.text;
-      ocrUsed = result.ocrUsed;
-    } catch (err) {
-      logger.warn(`Bulk text extraction failed: ${err.message}`);
-    }
-
     const { url } = await uploadToSupabase(f.filePath, 'scripts');
     results.push({
       studentId: f.studentId,
       examId: f.examId,
       filePath: url,
-      extractedText,
-      ocrUsed,
+      extractedText: null,
+      ocrUsed: false,
+      ocrMethod: null,
     });
   }
   return prisma.script.createMany({ data: results });

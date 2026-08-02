@@ -8,10 +8,15 @@ router.use(authenticate);
 router.get('/', controller.getScripts);
 router.get('/:id', controller.getScript);
 
-router.post('/upload', (req, res, next) => {
-  req.uploadSubDir = 'scripts';
-  next();
-}, uploadScripts.array('files', 50), controller.uploadScript);
+router.post(
+  '/upload',
+  (req, res, next) => {
+    req.uploadSubDir = 'scripts';
+    next();
+  },
+  uploadScripts.array('files', 50),
+  controller.uploadScript
+);
 
 router.delete('/:id', controller.deleteScript);
 

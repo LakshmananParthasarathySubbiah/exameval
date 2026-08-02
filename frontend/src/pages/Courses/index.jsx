@@ -6,6 +6,7 @@ import DataTable from '../../components/DataTable';
 import Modal from '../../components/Modal';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useUIStore } from '../../store/uiStore';
+import { useAuthStore } from '../../store/authStore';
 import { useDebounce, usePagination } from '../../hooks';
 import { formatDate, extractError } from '../../utils';
 
@@ -36,6 +37,7 @@ function CourseForm({ initial, onSubmit, loading }) {
 export default function CoursesPage() {
   const qc = useQueryClient();
   const addToast = useUIStore((s) => s.addToast);
+  const isAdmin = useAuthStore((s) => s.user?.role) === 'ADMIN';
   const [search, setSearch] = useState('');
   const dSearch = useDebounce(search, 300);
   const { page, limit, goToPage, reset } = usePagination(20);
@@ -93,9 +95,15 @@ export default function CoursesPage() {
           <h1 className="font-display font-bold text-2xl text-slate-900 dark:text-slate-100">Courses</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage academic courses</p>
         </div>
-        <button onClick={() => setModal({ mode: 'create' })} className="btn-primary">
-          <Plus className="w-4 h-4" /> Add Course
-        </button>
+        {isAdmin ? (
+          <button onClick={() => setModal({ mode: 'create' })} className="btn-primary">
+            <Plus className="w-4 h-4" /> Add Course
+          </button>
+        ) : (
+          <span className="rounded-full border border-surface-300 px-3 py-1 text-xs text-slate-500 dark:border-surface-700">
+            Read-only — admins manage courses
+          </span>
+        )}
       </div>
 
       <div className="card p-5 flex flex-col gap-4">
@@ -110,7 +118,7 @@ export default function CoursesPage() {
         </div>
 
         <DataTable
-          columns={columns}
+          columns={isAdmin ? columns : columns.filter((c) => c.key !== 'actions')}
           data={data?.data || []}
           isLoading={isLoading}
           pagination={data?.pagination}

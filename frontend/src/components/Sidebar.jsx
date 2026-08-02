@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   BookOpen, GraduationCap, Users, FileText,
-  BarChart3, LogOut, ChevronRight, Layers
+  BarChart3, LogOut, ChevronRight, Layers, TrendingUp
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useUIStore } from '../store/uiStore';
@@ -12,6 +12,7 @@ const NAV = [
   { to: '/students',    label: 'Students',    icon: Users },
   { to: '/scripts',     label: 'Scripts',     icon: FileText },
   { to: '/evaluations', label: 'Evaluations', icon: BarChart3 },
+  { to: '/analytics',   label: 'Analytics',   icon: TrendingUp },
 ];
 
 export default function Sidebar({ collapsed }) {

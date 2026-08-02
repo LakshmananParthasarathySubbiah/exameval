@@ -1,0 +1,37 @@
+{
+  "root": true,
+  "env": { "node": true, "es2022": true },
+  "parserOptions": { "ecmaVersion": 2022, "sourceType": "script" },
+  "extends": ["eslint:recommended", "plugin:n/recommended", "prettier"],
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-console": "off",
+    "no-empty": ["error", { "allowEmptyCatch": true }],
+    "no-control-regex": "off",
+    "no-irregular-whitespace": ["error", { "skipRegExps": true }],
+    "n/no-process-exit": "off",
+    "n/no-unpublished-require": "off",
+    "n/no-unpublished-import": "off",
+    "n/no-missing-require": "off"
+  },
+  "overrides": [
+    {
+      "files": ["*.mjs"],
+      "parserOptions": { "sourceType": "module" }
+    },
+    {
+      "files": ["tests/**/*.js", "**/*.test.js"],
+      "globals": {
+        "describe": "readonly",
+        "it": "readonly",
+        "expect": "readonly",
+        "vi": "readonly",
+        "beforeEach": "readonly",
+        "afterEach": "readonly",
+        "beforeAll": "readonly",
+        "afterAll": "readonly"
+      }
+    }
+  ],
+  "ignorePatterns": ["node_modules/", "coverage/", "logs/", "uploads/", "src/prisma/migrations/"]
+}

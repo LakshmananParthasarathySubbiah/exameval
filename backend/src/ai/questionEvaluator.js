@@ -1,25 +1,9 @@
-const { groqJsonCall } = require('../utils/groqClient');
+const groqClient = require('../utils/groqClient');
 const logger = require('../utils/logger');
+const { wrapUntrusted, detectInjection, validateGraderOutput } = require('../utils/sanitize');
+const { getEvaluatorPrompt } = require('./prompts');
 
-const SYSTEM_PROMPT = `You are a strict, fair university exam evaluator.
-You must evaluate a student's answer against the provided rubric.
-
-Rules:
-- Be objective and consistent. Do not infer intent — only evaluate what is written.
-- Partial credit is allowed. Award marks proportionally for partially correct answers.
-- A blank or null answer receives 0 marks.
-- Confidence reflects how clearly the student's answer maps to the rubric (1.0 = unambiguous, 0.0 = cannot determine correctness).
-- Return ONLY valid JSON. No markdown, no explanation, no backticks.
-
-Required output shape:
-{
-  "score": <integer, 0 to maxMarks>,
-  "maxScore": <same as maxMarks>,
-  "feedback": "<2–4 sentences explaining the mark awarded>",
-  "strengths": ["<what the student did well>"],
-  "mistakes": ["<what was wrong or missing>"],
-  "confidence": <float 0.0–1.0>
-}`;
+const SYSTEM_PROMPT = getEvaluatorPrompt();
 
 /**
  * Evaluate a single question answer against rubric criteria.
@@ -32,34 +16,47 @@ async function evaluateQuestion(question, answerText) {
 
   logger.debug(`Evaluating ${questionNumber}...`);
 
+  // Prompt-injection defense: scan the untrusted answer for jailbreak patterns.
+  const injection = detectInjection(answerText);
+  if (injection.suspicious) {
+    logger.warn(`Possible prompt-injection in answer for ${questionNumber}`, {
+      matches: injection.matches,
+    });
+  }
+
   const userMessage = `Question: ${questionText}
 Max marks: ${maxMarks}
 Grading criteria: ${gradingCriteria}
 Key points expected: ${Array.isArray(keyPoints) ? keyPoints.join(', ') : keyPoints}
 
-Student's answer:
-${answerText || 'No answer provided'}`;
+${wrapUntrusted(answerText, 'STUDENT_ANSWER')}`;
 
-  const result = await groqJsonCall({
+  const result = await groqClient.groqJsonCall({
     systemPrompt: SYSTEM_PROMPT,
     userMessage,
     label: `evaluator-${questionNumber}`,
   });
 
-  // Validate and clamp score
-  const score = Math.min(Math.max(Number(result.score) || 0, 0), maxMarks);
-  const confidence = Math.min(Math.max(Number(result.confidence) || 0, 0), 1);
+  // Validate + clamp the model output (defends against hallucinated/injected scores).
+  const validated = validateGraderOutput(result, maxMarks);
+
+  // If the answer looked like an injection attempt, never trust the score —
+  // force confidence below the review threshold so a human verifies it.
+  const confidence = injection.suspicious
+    ? Math.min(validated.confidence, 0.3)
+    : validated.confidence;
 
   return {
     questionNumber,
     questionText,
     studentAnswer: answerText || '',
-    score,
-    maxScore: maxMarks,
-    feedback: result.feedback || '',
-    strengths: Array.isArray(result.strengths) ? result.strengths : [],
-    mistakes: Array.isArray(result.mistakes) ? result.mistakes : [],
+    score: validated.score,
+    maxScore: validated.maxScore,
+    feedback: validated.feedback,
+    strengths: validated.strengths,
+    mistakes: validated.mistakes,
     confidence,
+    injectionFlagged: injection.suspicious,
   };
 }
 
@@ -80,7 +77,9 @@ async function evaluateAllQuestions(rubricQuestions, answersMap) {
       batch.map((q) => evaluateQuestion(q, answersMap.get(q.questionNumber) || null))
     );
     results.push(...batchResults);
-    logger.info(`Evaluated batch ${Math.floor(i / MAX_CONCURRENT) + 1}: questions ${i + 1}–${i + batch.length}`);
+    logger.info(
+      `Evaluated batch ${Math.floor(i / MAX_CONCURRENT) + 1}: questions ${i + 1}–${i + batch.length}`
+    );
   }
 
   return results;

@@ -53,3 +53,14 @@ export const evaluationsApi = {
 export const auditApi = {
   list: (params) => api.get('/audit', { params }),
 };
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+export const analyticsApi = {
+  exam: (examId) => api.get(`/analytics/exam/${examId}`),
+};
+
+// ── AI Assistant ──────────────────────────────────────────────────────────────
+export const assistantApi = {
+  ask: ({ question, examId, history }) =>
+    api.post('/assistant/ask', { question, examId, history }),
+};

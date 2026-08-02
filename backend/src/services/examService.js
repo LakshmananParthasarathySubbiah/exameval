@@ -1,13 +1,31 @@
-const { PrismaClient } = require('@prisma/client');
 const { extractText } = require('../utils/extractText');
 const { uploadToSupabase } = require('../utils/supabase');
 const logger = require('../utils/logger');
+const prisma = require('../utils/prisma');
 
-const prisma = new PrismaClient();
+/**
+ * Ownership rule: admins manage every exam; staff only the exams they created.
+ * Pure + testable.
+ */
+function canManageExam(exam, user) {
+  if (!exam || !user) return false;
+  return user.role === 'ADMIN' || exam.createdById === user.id;
+}
 
-async function getExams({ page = 1, limit = 20, courseId }) {
+function assertCanManage(exam, user) {
+  if (!canManageExam(exam, user)) {
+    const err = new Error('You can only manage exams you created');
+    err.status = 403;
+    throw err;
+  }
+}
+
+async function getExams({ page = 1, limit = 20, courseId, user }) {
   const skip = (page - 1) * limit;
-  const where = courseId ? { courseId } : {};
+  const where = {};
+  if (courseId) where.courseId = courseId;
+  // Staff see only their own exams; admins see all.
+  if (user && user.role !== 'ADMIN') where.createdById = user.id;
 
   const [exams, total] = await Promise.all([
     prisma.exam.findMany({
@@ -42,7 +60,7 @@ async function getExamById(id) {
   return exam;
 }
 
-async function createExam({ title, date, courseId, rubricFile }) {
+async function createExam({ title, date, courseId, rubricFile }, user) {
   let rubricFilePath = null;
   let rubricText = null;
 
@@ -57,12 +75,27 @@ async function createExam({ title, date, courseId, rubricFile }) {
   }
 
   return prisma.exam.create({
-    data: { title, date: new Date(date), courseId, rubricFilePath, rubricText },
+    data: {
+      title,
+      date: new Date(date),
+      courseId,
+      rubricFilePath,
+      rubricText,
+      createdById: user?.id || null,
+    },
     include: { course: { select: { name: true, code: true } } },
   });
 }
 
-async function updateExam(id, { title, date, courseId, rubricFile }) {
+async function updateExam(id, { title, date, courseId, rubricFile }, user) {
+  const existing = await prisma.exam.findUnique({ where: { id }, select: { createdById: true } });
+  if (!existing) {
+    const err = new Error('Exam not found');
+    err.status = 404;
+    throw err;
+  }
+  assertCanManage(existing, user);
+
   const updateData = {};
   if (title) updateData.title = title;
   if (date) updateData.date = new Date(date);
@@ -83,8 +116,22 @@ async function updateExam(id, { title, date, courseId, rubricFile }) {
   });
 }
 
-async function deleteExam(id) {
+async function deleteExam(id, user) {
+  const existing = await prisma.exam.findUnique({ where: { id }, select: { createdById: true } });
+  if (!existing) {
+    const err = new Error('Exam not found');
+    err.status = 404;
+    throw err;
+  }
+  assertCanManage(existing, user);
   return prisma.exam.delete({ where: { id } });
 }
 
-module.exports = { getExams, getExamById, createExam, updateExam, deleteExam };
+module.exports = {
+  getExams,
+  getExamById,
+  createExam,
+  updateExam,
+  deleteExam,
+  canManageExam,
+};

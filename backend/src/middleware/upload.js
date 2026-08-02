@@ -31,6 +31,16 @@ const pdfFilter = (req, file, cb) => {
   }
 };
 
+// Scripts may be PDFs OR images (a phone photo of a handwritten sheet).
+const scriptFilter = (req, file, cb) => {
+  const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+  if (allowed.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only PDF or image (JPG/PNG/WebP) files are allowed'), false);
+  }
+};
+
 const csvFilter = (req, file, cb) => {
   if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
     cb(null, true);
@@ -46,10 +56,10 @@ const uploadRubric = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
 });
 
-// Script upload (multiple PDFs)
+// Script upload (multiple PDFs or images)
 const uploadScripts = multer({
   storage,
-  fileFilter: pdfFilter,
+  fileFilter: scriptFilter,
   limits: { fileSize: 50 * 1024 * 1024, files: 50 },
 });
 

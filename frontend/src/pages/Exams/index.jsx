@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, ChevronDown, ChevronRight, FileText } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, FileText } from 'lucide-react';
 import { examsApi, coursesApi } from '../../api/resources';
 import DataTable from '../../components/DataTable';
 import Modal from '../../components/Modal';
@@ -11,8 +11,12 @@ import { useUIStore } from '../../store/uiStore';
 import { usePagination } from '../../hooks';
 import { formatDate, extractError } from '../../utils';
 
-function ExamForm({ onSubmit, loading, courses }) {
-  const [form, setForm] = useState({ title: '', date: '', courseId: '' });
+function ExamForm({ initial, onSubmit, loading, courses }) {
+  const [form, setForm] = useState({
+    title: initial?.title || '',
+    date: initial?.date ? new Date(initial.date).toISOString().slice(0, 10) : '',
+    courseId: initial?.courseId || '',
+  });
   const [file, setFile] = useState(null);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -44,11 +48,16 @@ function ExamForm({ onSubmit, loading, courses }) {
         </div>
       </div>
       <div>
-        <label className="label">Rubric PDF <span className="text-slate-400 font-normal">(optional)</span></label>
+        <label className="label">
+          Rubric PDF{' '}
+          <span className="text-slate-400 font-normal">
+            ({initial ? 'replace — optional' : 'optional'})
+          </span>
+        </label>
         <FileUploader accept=".pdf" onFiles={(files) => setFile(files[0] || null)} />
       </div>
       <button type="submit" disabled={loading} className="btn-primary self-end">
-        {loading ? 'Creating…' : 'Create Exam'}
+        {loading ? 'Saving…' : initial ? 'Update Exam' : 'Create Exam'}
       </button>
     </form>
   );
@@ -101,7 +110,7 @@ export default function ExamsPage() {
   const navigate = useNavigate();
   const [courseFilter, setCourseFilter] = useState('');
   const { page, limit, goToPage } = usePagination(20);
-  const [showCreate, setShowCreate] = useState(false);
+  const [examModal, setExamModal] = useState(null); // null | { mode:'create'|'edit', data? }
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [rubricExam, setRubricExam] = useState(null);
 
@@ -117,7 +126,13 @@ export default function ExamsPage() {
 
   const create = useMutation({
     mutationFn: (fd) => examsApi.create(fd),
-    onSuccess: () => { qc.invalidateQueries(['exams']); setShowCreate(false); addToast('Exam created', 'success'); },
+    onSuccess: () => { qc.invalidateQueries(['exams']); setExamModal(null); addToast('Exam created', 'success'); },
+    onError: (e) => addToast(extractError(e), 'error'),
+  });
+
+  const update = useMutation({
+    mutationFn: ({ id, fd }) => examsApi.update(id, fd),
+    onSuccess: () => { qc.invalidateQueries(['exams']); setExamModal(null); addToast('Exam updated', 'success'); },
     onError: (e) => addToast(extractError(e), 'error'),
   });
 
@@ -147,10 +162,16 @@ export default function ExamsPage() {
     {
       key: 'actions', label: '',
       render: (_, row) => (
-        <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(row); }}
-          className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 transition-colors">
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-1 justify-end">
+          <button onClick={(e) => { e.stopPropagation(); setExamModal({ mode: 'edit', data: row }); }}
+            className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 text-slate-400 hover:text-brand-600 transition-colors">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(row); }}
+            className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       ),
     },
   ];
@@ -164,7 +185,7 @@ export default function ExamsPage() {
           <h1 className="font-display font-bold text-2xl text-slate-900 dark:text-slate-100">Exams</h1>
           <p className="text-sm text-slate-500 mt-0.5">Create and manage examinations</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">
+        <button onClick={() => setExamModal({ mode: 'create' })} className="btn-primary">
           <Plus className="w-4 h-4" /> New Exam
         </button>
       </div>
@@ -186,8 +207,21 @@ export default function ExamsPage() {
         />
       </div>
 
-      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="New Exam" size="md">
-        <ExamForm courses={courses} loading={create.isPending} onSubmit={(fd) => create.mutate(fd)} />
+      <Modal
+        isOpen={!!examModal}
+        onClose={() => setExamModal(null)}
+        title={examModal?.mode === 'edit' ? 'Edit Exam' : 'New Exam'}
+        size="md"
+      >
+        <ExamForm
+          initial={examModal?.mode === 'edit' ? examModal.data : null}
+          courses={courses}
+          loading={create.isPending || update.isPending}
+          onSubmit={(fd) => {
+            if (examModal?.mode === 'edit') update.mutate({ id: examModal.data.id, fd });
+            else create.mutate(fd);
+          }}
+        />
       </Modal>
 
       <Modal isOpen={!!rubricExam} onClose={() => setRubricExam(null)} title={`Rubric — ${rubricExam?.title}`} size="lg">

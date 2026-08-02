@@ -1,6 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 async function getAuditLogs({ evaluationId, page = 1, limit = 50 }) {
   const skip = (page - 1) * limit;

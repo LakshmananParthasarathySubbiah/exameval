@@ -1,5 +1,6 @@
 const { groqJsonCall } = require('../utils/groqClient');
 const logger = require('../utils/logger');
+const { sanitizeUntrustedText } = require('../utils/sanitize');
 
 const SYSTEM_PROMPT = `You are an expert academic rubric parser. Your job is to extract structured question data from a university exam rubric PDF.
 Return ONLY a valid JSON array. No explanation, no markdown, no backticks. Each element must match this exact shape:
@@ -21,7 +22,7 @@ async function parseRubric(rubricText) {
 
   const parsed = await groqJsonCall({
     systemPrompt: SYSTEM_PROMPT,
-    userMessage: `Parse the following exam rubric:\n\n${rubricText}`,
+    userMessage: `Parse the following exam rubric:\n\n${sanitizeUntrustedText(rubricText, { maxLength: 20000 })}`,
     label: 'rubricParser',
   });
 

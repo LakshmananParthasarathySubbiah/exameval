@@ -17,7 +17,9 @@ async function getCourses(req, res, next) {
     const { page = 1, limit = 20, search = '' } = req.query;
     const result = await courseService.getCourses({ page: +page, limit: +limit, search });
     res.json({ success: true, data: result.courses, pagination: result.pagination });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function createCourse(req, res, next) {
@@ -25,7 +27,9 @@ async function createCourse(req, res, next) {
     validate(req);
     const course = await courseService.createCourse(req.body);
     res.status(201).json({ success: true, data: course });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function updateCourse(req, res, next) {
@@ -33,14 +37,18 @@ async function updateCourse(req, res, next) {
     validate(req);
     const course = await courseService.updateCourse(req.params.id, req.body);
     res.json({ success: true, data: course });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function deleteCourse(req, res, next) {
   try {
     await courseService.deleteCourse(req.params.id);
     res.json({ success: true, data: { message: 'Course deleted' } });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 }
 
 module.exports = { getCourses, createCourse, updateCourse, deleteCourse };

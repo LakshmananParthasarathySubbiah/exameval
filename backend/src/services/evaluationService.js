@@ -1,8 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
 const { enqueueEvaluation } = require('../queues/evaluationQueue');
 const logger = require('../utils/logger');
-
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 async function getEvaluations({ page = 1, limit = 20, examId, status }) {
   const skip = (page - 1) * limit;
@@ -180,13 +178,15 @@ async function getExamSummary(examId) {
   });
 
   const total = evaluations.length;
-  const completed = evaluations.filter((e) => e.status === 'COMPLETED' || e.status === 'PENDING_REVIEW').length;
+  const completed = evaluations.filter(
+    (e) => e.status === 'COMPLETED' || e.status === 'PENDING_REVIEW'
+  ).length;
   const pendingReview = evaluations.filter((e) => e.status === 'PENDING_REVIEW').length;
-  const avgScore = completed > 0
-    ? evaluations
-        .filter((e) => e.percentage != null)
-        .reduce((sum, e) => sum + e.percentage, 0) / (completed || 1)
-    : 0;
+  const avgScore =
+    completed > 0
+      ? evaluations.filter((e) => e.percentage != null).reduce((sum, e) => sum + e.percentage, 0) /
+        (completed || 1)
+      : 0;
 
   return { total, completed, pendingReview, avgScore: Math.round(avgScore * 100) / 100 };
 }

@@ -24,7 +24,9 @@ const errorHandler = (err, req, res, next) => {
 
   // Validation errors (express-validator)
   if (err.type === 'validation') {
-    return res.status(422).json({ success: false, error: 'Validation failed', details: err.errors });
+    return res
+      .status(422)
+      .json({ success: false, error: 'Validation failed', details: err.errors });
   }
 
   // Multer errors
@@ -37,9 +39,10 @@ const errorHandler = (err, req, res, next) => {
   }
 
   const status = err.status || err.statusCode || 500;
-  const message = process.env.NODE_ENV === 'production' && status === 500
-    ? 'Internal server error'
-    : err.message || 'Internal server error';
+  const message =
+    process.env.NODE_ENV === 'production' && status === 500
+      ? 'Internal server error'
+      : err.message || 'Internal server error';
 
   res.status(status).json({ success: false, error: message });
 };

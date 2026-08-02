@@ -42,9 +42,9 @@ export default function ScriptsPage() {
 
   const { data: studentsData } = useQuery({
     queryKey: ['students-for-exam', uploadForm.examId || examFilter],
-  queryFn: () => studentsApi.list({ 
-    limit: 200, 
-    examId: uploadForm.examId || examFilter 
+  queryFn: () => studentsApi.list({
+    limit: 200,
+    examId: uploadForm.examId || examFilter
   }).then((r) => r.data),
   enabled: !!(uploadForm.examId || examFilter),
   });
@@ -92,7 +92,7 @@ export default function ScriptsPage() {
   const columns = [
     { key: 'student', label: 'Student', render: (v) => <div><div className="font-medium text-slate-800 dark:text-slate-200">{v?.name}</div><div className="text-xs font-mono text-slate-400">{v?.rollNumber}</div></div> },
     { key: 'status', label: 'Status', render: (v) => <StatusBadge status={v} /> },
-    { key: 'ocrUsed', label: 'OCR', render: (v) => v ? <span className="badge bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">OCR</span> : <span className="text-slate-400 text-xs">—</span> },
+    { key: 'ocrUsed', label: 'OCR', render: (v, row) => v ? <span className="badge bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" title="Transcribed by OCR — verify accuracy">{row.ocrMethod === 'gemini' ? 'Gemini' : row.ocrMethod === 'groq' ? 'Groq' : row.ocrMethod === 'tesseract' ? 'Tesseract' : 'OCR'}</span> : <span className="text-slate-400 text-xs">—</span> },
     { key: 'evaluations', label: 'Eval', render: (v) => v?.[0] ? <StatusBadge status={v[0].status} /> : <span className="text-slate-400 text-xs">None</span> },
     { key: 'createdAt', label: 'Uploaded', sortable: true, render: (v) => formatDate(v) },
     {
@@ -173,10 +173,10 @@ export default function ScriptsPage() {
             </div>
           </div>
           <FileUploader
-            accept=".pdf"
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
             multiple
             onFiles={setUploadFiles}
-            label="Drop PDF answer scripts here"
+            label="Drop PDF or image (handwritten) answer scripts here"
             progress={uploadProgress}
           />
           <button
